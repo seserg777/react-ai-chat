@@ -6,13 +6,34 @@ import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import { useColorScheme, useTheme } from '@mui/material/styles';
 
 type Props = {
   thread: ChatThread | null;
   streaming: boolean;
 };
 
-function EmptyState({ title, subtitle, icon }: { title: string; subtitle: string; icon: 'forum' | 'smart' }) {
+function resolveColorScheme(
+  mode: 'light' | 'dark' | 'system' | undefined,
+  systemMode: 'light' | 'dark' | undefined,
+): 'light' | 'dark' {
+  if (mode === 'system' || mode == null) {
+    return systemMode ?? 'light';
+  }
+  return mode;
+}
+
+function EmptyState({
+  title,
+  subtitle,
+  icon,
+  isDark,
+}: {
+  title: string;
+  subtitle: string;
+  icon: 'forum' | 'smart';
+  isDark: boolean;
+}) {
   const Icon = icon === 'forum' ? ForumOutlinedIcon : SmartToyOutlinedIcon;
   return (
     <Box
@@ -37,10 +58,9 @@ function EmptyState({ title, subtitle, icon }: { title: string; subtitle: string
             justifyContent: 'center',
             bgcolor: 'action.hover',
             color: 'primary.main',
-            boxShadow: (theme) =>
-              theme.palette.mode === 'dark'
-                ? '0 0 0 1px rgba(255,255,255,0.06), 0 8px 32px rgba(0,0,0,0.35)'
-                : '0 8px 28px rgba(15,23,42,0.08)',
+            boxShadow: isDark
+              ? '0 0 0 1px rgba(255,255,255,0.06), 0 8px 32px rgba(0,0,0,0.35)'
+              : '0 8px 28px rgba(15,23,42,0.08)',
           }}
         >
           <Icon sx={{ fontSize: 44, opacity: 0.95 }} />
@@ -57,10 +77,21 @@ function EmptyState({ title, subtitle, icon }: { title: string; subtitle: string
 }
 
 export function MessageList({ thread, streaming }: Props) {
+  const theme = useTheme();
+  const { mode, systemMode } = useColorScheme();
+  const isDark = resolveColorScheme(mode, systemMode) === 'dark';
+
+  const scrollRootRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const root = scrollRootRef.current;
+    if (!root) return;
+    if (streaming) {
+      root.scrollTop = root.scrollHeight;
+    } else {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [thread?.messages, streaming]);
 
   if (!thread) {
@@ -69,6 +100,7 @@ export function MessageList({ thread, streaming }: Props) {
         icon="smart"
         title="Start a conversation"
         subtitle="Create a new chat to get started — your history stays in this browser."
+        isDark={isDark}
       />
     );
   }
@@ -79,12 +111,30 @@ export function MessageList({ thread, streaming }: Props) {
         icon="forum"
         title="Say hello"
         subtitle="Type a message below. History is saved in localStorage on this device."
+        isDark={isDark}
       />
     );
   }
 
+  const assistantSurface = isDark
+    ? {
+        bgcolor: '#1c2433',
+        color: '#e2e8f0',
+        borderColor: 'rgba(148,163,184,0.35)',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.06)',
+        captionColor: '#94a3b8',
+      }
+    : {
+        bgcolor: theme.palette.grey[50],
+        color: theme.palette.text.primary,
+        borderColor: theme.palette.divider,
+        boxShadow: '0 4px 20px rgba(15, 23, 42, 0.08)',
+        captionColor: theme.palette.text.secondary,
+      };
+
   return (
     <Box
+      ref={scrollRootRef}
       role="log"
       aria-live="polite"
       aria-relevant="additions text"
@@ -111,26 +161,20 @@ export function MessageList({ thread, streaming }: Props) {
                   py: 1.5,
                   borderRadius: 3,
                   border: 1,
-                  borderColor: 'divider',
-                  boxShadow: (theme) =>
-                    theme.palette.mode === 'dark'
-                      ? '0 4px 24px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.05)'
-                      : '0 4px 20px rgba(15, 23, 42, 0.08)',
                   ...(isUser
                     ? {
                         borderColor: 'transparent',
-                        bgcolor: (theme) =>
-                          theme.palette.mode === 'dark' ? theme.palette.primary.dark : theme.palette.primary.main,
-                        color: (theme) => theme.palette.primary.contrastText,
-                        boxShadow: (theme) =>
-                          theme.palette.mode === 'dark'
-                            ? '0 4px 20px rgba(52, 211, 153, 0.18)'
-                            : '0 6px 24px rgba(4, 120, 87, 0.28)',
+                        bgcolor: isDark ? theme.palette.primary.dark : theme.palette.primary.main,
+                        color: theme.palette.primary.contrastText,
+                        boxShadow: isDark
+                          ? '0 4px 20px rgba(52, 211, 153, 0.18)'
+                          : '0 6px 24px rgba(4, 120, 87, 0.28)',
                       }
                     : {
-                        bgcolor: (theme) =>
-                          theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'grey.50',
-                        borderColor: 'divider',
+                        bgcolor: assistantSurface.bgcolor,
+                        color: assistantSurface.color,
+                        borderColor: assistantSurface.borderColor,
+                        boxShadow: assistantSurface.boxShadow,
                         borderLeftWidth: 3,
                         borderLeftStyle: 'solid',
                         borderLeftColor: 'primary.light',
@@ -142,8 +186,10 @@ export function MessageList({ thread, streaming }: Props) {
               >
                 <Typography
                   variant="caption"
-                  color={isUser ? 'inherit' : 'text.secondary'}
-                  sx={{ opacity: isUser ? 0.9 : 1 }}
+                  sx={{
+                    opacity: isUser ? 0.9 : 1,
+                    color: isUser ? 'inherit' : assistantSurface.captionColor,
+                  }}
                   display="block"
                   gutterBottom
                 >
@@ -152,8 +198,8 @@ export function MessageList({ thread, streaming }: Props) {
                 <Typography
                   variant="body1"
                   component="div"
-                  color={isUser ? 'inherit' : 'text.primary'}
                   sx={{
+                    color: isUser ? 'inherit' : assistantSurface.color,
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
                     '& .stream-cursor': {
